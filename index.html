@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LINE LIFF - ระบบเช็คชื่อครู</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- LINE LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+      .shimmer {
+        background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+      }
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      /* Pre-loading Animation */
+      #preloader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        min-height: 100vh;
+        background: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+      }
+      #preloader img {
+        max-width: 250px;
+        max-height: 250px;
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100 min-h-screen">
+    <!-- Pre-loading Animation -->
+    <div id="preloader">
+      <img src="https://media.tenor.com/pEDQL3XJxdsAAAAi/cat-cute.gif" alt="Loading..." />
+    </div>
+
+    <!-- Header with Profile -->
+    <div class="bg-green-600 text-white shadow-md">
+      <div class="container mx-auto px-4 py-4">
+        <div class="flex items-center justify-between">
+          <h1 class="text-2xl font-bold">ระบบเช็คชื่อครูลา-ไปราชการ</h1>
+          <div id="profile-container" class="flex items-center space-x-3">
+            <div id="profile-loading" class="shimmer rounded-full w-10 h-10"></div>
+            <div class="shimmer rounded w-24 h-4"></div>
+          </div>
+        </div>
+        <div class="mt-2">
+          <div class="text-sm opacity-90">
+            วันที่: <span id="currentDate" class="font-medium"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+      <!-- Status Messages -->
+      <div id="statusMessage" class="hidden mb-4 p-4 rounded-md"></div>
+
+      <!-- Loading State -->
+      <div id="loading-state" class="py-8">
+        <div class="flex flex-col items-center justify-center">
+          <div class="shimmer w-full h-12 rounded-md mb-4"></div>
+          <div class="shimmer w-full h-64 rounded-md"></div>
+        </div>
+      </div>
+
+      <!-- Data Table -->
+      <div id="data-container" class="hidden">
+        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          <div class="overflow-x-auto">
+            <table id="dataTable" class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ประเภทการลา</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขที่</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เลขประจำตัว</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">คำนำหน้า</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">นามสกุล</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">รูปภาพ</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">แชร์</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody" class="bg-white divide-y divide-gray-200"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="mt-6 flex justify-center">
+          <button id="submitBtn" class="px-6 py-3 bg-green-600 text-white font-medium rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors">
+            บันทึกข้อมูลครู
+          </button>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden mt-4 text-center">
+          <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm text-white bg-green-600 rounded-md">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            กำลังบันทึกข้อมูล...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // LINE LIFF Variables
+      let liffId = "2000563749-yR8wY72D"; // Replace with your actual LIFF ID
+      let lineProfile = null;
+      let studentTimestamps = new Map(); // Store timestamps for absent students
+      let studentAbsenceTypes = new Map(); // Store absence types for absent students
+      let studentData = []; // Store fetched student data
+      let additionalFeaturesAdded = false; // Flag to prevent duplicate features
+
+      // Hide preloader function
+      function hidePreloader() {
+        const preloader = document.getElementById("preloader");
+        if (preloader) {
+          preloader.style.display = "none";
+        }
+      }
+
+      // Initialize LIFF
+      async function initializeLiff() {
+        try {
+          await liff.init({ liffId });
+
+          if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+          }
+
+          lineProfile = await liff.getProfile();
+          displayUserProfile(lineProfile);
+
+          showCurrentDate();
+          await fetchData(); // Wait for data to be fetched
+        } catch (error) {
+          console.error("LIFF initialization failed:", error);
+          showStatusMessage("เกิดข้อผิดพลาดในการเชื่อมต่อกับ LINE: " + error.message, "error");
+          hidePreloader(); // Ensure preloader is hidden on error
+        }
+      }
+
+      // Display user profile
+      function displayUserProfile(profile) {
+        const profileContainer = document.getElementById("profile-container");
+        profileContainer.innerHTML = `
+          <img src="${profile.pictureUrl}" alt="Profile" class="w-10 h-10 rounded-full border-2 border-white">
+          <span class="font-medium">${profile.displayName}</span>
+        `;
+      }
+
+      // Show current date in Thai format
+      function showCurrentDate() {
+        const now = new Date();
+        const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+        document.getElementById("currentDate").textContent = now.toLocaleDateString("th-TH", options);
+      }
+
+      // Validate and sanitize string
+      function sanitizeString(str, maxLength = 50) {
+        if (!str || typeof str !== 'string') return '';
+        return str.trim().substring(0, maxLength).replace(/[<>"'&]/g, '');
+      }
+
+      // Validate URL
+      function validateUrl(url) {
+        if (!url || typeof url !== 'string') return 'https://via.placeholder.com/300?text=No+Image';
+        try {
+          new URL(url);
+          return url;
+        } catch {
+          return 'https://via.placeholder.com/300?text=No+Image';
+        }
+      }
+
+      // Fetch student data from Google Sheets
+      async function fetchData() {
+        const sheetUrl = "https://script.google.com/macros/s/AKfycbxoaZpFAo-QREbkTmJTqyyqStQsjJItvsS9kd3v0fajnbZU9hGAa1ouYWQXp1m7zLXfsw/exec";
+
+        try {
+          const response = await fetch(sheetUrl);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          studentData = await response.json();
+
+          if (!Array.isArray(studentData)) {
+            throw new Error("ข้อมูลจาก Google Sheet ไม่ใช่อาร์เรย์");
+          }
+
+          // Show data table
+          document.getElementById("loading-state").classList.add("hidden");
+          document.getElementById("data-container").classList.remove("hidden");
+
+          const tableBody = document.getElementById("tableBody");
+          tableBody.innerHTML = "";
+
+          // Store total students
+          window.totalStudents = studentData.length;
+
+          studentData.forEach((row, index) => {
+            const studentId = sanitizeString(row["เลขประจำตัว"]);
+            const studentNumber = sanitizeString(row["เลขที่"]);
+            const fullName = sanitizeString(`${row["คำนำหน้า"] || ""} ${row["ชื่อ"] || ""} ${row["นามสกุล"] || ""}`);
+            const imageUrl = validateUrl(row["ภาพ"]);
+            const absent = row["ขาดเรียน"] || false;
+            let timestamp = absent ? (studentTimestamps.get(studentId) || row["เวลา"] || new Date().toLocaleTimeString("th-TH")) : "";
+            let absenceType = row["ประเภทการลา"] || "";
+
+            const tr = document.createElement("tr");
+            tr.className = index % 2 === 0 ? "bg-white" : "bg-gray-50";
+            tr.setAttribute("data-student-id", studentId);
+
+            tr.innerHTML = `
+              <td class="px-6 py-4 whitespace-nowrap text-center">
+                <div class="flex items-center space-x-2">
+                  <input type="checkbox" id="check_${studentId}" class="attendance-check h-5 w-5 text-red-600 rounded" 
+                    data-id="${studentId}" data-number="${studentNumber}" data-name="${fullName}" data-image="${imageUrl}" ${absent ? "checked" : ""}>
+                  <span class="time-display text-sm text-gray-500">${timestamp}</span>
+                </div>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <select id="absenceType_${studentId}" class="absence-type border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-500" 
+                  data-id="${studentId}" ${absent ? "" : "disabled"}>
+                  <option value="" ${absenceType === "" ? "selected" : ""}>เลือกประเภทการลา</option>
+                  <option value="ลาป่วย" ${absenceType === "ลาป่วย" ? "selected" : ""}>ลาป่วย</option>
+                  <option value="ลากิจ" ${absenceType === "ลากิจ" ? "selected" : ""}>ลากิจ</option>
+                  <option value="ไปราชการ" ${absenceType === "ไปราชการ" ? "selected" : ""}>ไปราชการ</option>
+                </select>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${studentNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${studentId}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${sanitizeString(row["คำนำหน้า"] || "")}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${sanitizeString(row["ชื่อ"] || "")}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${sanitizeString(row["นามสกุล"] || "")}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <img src="${imageUrl}" alt="Profile" 
+                  class="h-10 w-10 rounded-full object-cover border border-gray-200"
+                  onerror="this.src='https://via.placeholder.com/40?text=N/A'">
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <button class="share-btn px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 focus:outline-none"
+                  data-id="${studentId}" data-name="${fullName}" data-image="${imageUrl}" data-number="${studentNumber}">
+                  แชร์
+                </button>
+              </td>
+            `;
+            tableBody.appendChild(tr);
+
+            // Store timestamp and absence type for absent students
+            if (absent && timestamp) {
+              studentTimestamps.set(studentId, timestamp);
+              if (absenceType) {
+                studentAbsenceTypes.set(studentId, absenceType);
+              }
+            }
+          });
+
+          addCheckboxListeners();
+          addAbsenceTypeListeners();
+          addShareButtonListeners();
+          if (!additionalFeaturesAdded) {
+            addAdditionalFeatures();
+            additionalFeaturesAdded = true;
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+          showStatusMessage("ไม่สามารถดึงข้อมูลนักเรียนได้: " + error.message, "error");
+          document.getElementById("loading-state").classList.add("hidden");
+        } finally {
+          hidePreloader(); // Ensure preloader is hidden after data fetch
+        }
+      }
+
+      // Add event listeners to checkboxes
+      function addCheckboxListeners() {
+        const checkboxes = document.querySelectorAll(".attendance-check");
+        checkboxes.forEach(checkbox => {
+          checkbox.addEventListener("change", function () {
+            const studentId = this.getAttribute("data-id");
+            const row = this.closest("tr");
+            const timeDisplay = row.querySelector(".time-display");
+            const absenceTypeSelect = row.querySelector(".absence-type");
+
+            if (this.checked) {
+              const now = new Date();
+              const timeString = now.toLocaleTimeString("th-TH");
+              studentTimestamps.set(studentId, timeString);
+              timeDisplay.textContent = timeString;
+              absenceTypeSelect.disabled = false;
+            } else {
+              studentTimestamps.delete(studentId);
+              studentAbsenceTypes.delete(studentId);
+              timeDisplay.textContent = "";
+              absenceTypeSelect.disabled = true;
+              absenceTypeSelect.value = "";
+            }
+          });
+        });
+      }
+
+      // Add event listeners to absence type dropdowns
+      function addAbsenceTypeListeners() {
+        const absenceTypeSelects = document.querySelectorAll(".absence-type");
+        absenceTypeSelects.forEach(select => {
+          select.addEventListener("change", function () {
+            const studentId = this.getAttribute("data-id");
+            const absenceType = this.value;
+            if (absenceType) {
+              studentAbsenceTypes.set(studentId, absenceType);
+            } else {
+              studentAbsenceTypes.delete(studentId);
+            }
+          });
+        });
+      }
+
+      // Add event listeners to share buttons
+      function addShareButtonListeners() {
+        const shareButtons = document.querySelectorAll(".share-btn");
+        shareButtons.forEach(button => {
+          button.addEventListener("click", function () {
+            const studentId = this.getAttribute("data-id");
+            const studentName = this.getAttribute("data-name");
+            const imageUrl = this.getAttribute("data-image");
+            const studentNumber = this.getAttribute("data-number");
+            shareSingleAttendance(studentId, studentName, imageUrl, studentNumber);
+          });
+        });
+      }
+
+      // Share single student absence via LINE
+      async function shareSingleAttendance(studentId, studentName, imageUrl, studentNumber) {
+        if (!liff.isApiAvailable("shareTargetPicker")) {
+          showStatusMessage("ฟังก์ชันแชร์ไม่รองรับในอุปกรณ์นี้ กรุณาอัปเดต LINE เป็นเวอร์ชัน 10.3.0 หรือใหม่กว่า", "error");
+          return;
+        }
+
+        try {
+          const now = new Date();
+          const dateString = now.toLocaleDateString("th-TH", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "long",
+          });
+
+          const absenceType = studentAbsenceTypes.get(studentId) || "ขาดเรียน";
+
+          // ตรวจสอบข้อมูลก่อนสร้าง Flex Message
+          if (!studentId || !studentName || !studentNumber || !imageUrl) {
+            throw new Error("ข้อมูลนักเรียนไม่ครบถ้วน");
+          }
+
+          const flexMessage = {
+            type: "flex",
+            altText: `การขาด-ลาของ ${studentName}`,
+            contents: {
+              type: "bubble",
+              hero: {
+                type: "image",
+                url: imageUrl,
+                size: "full",
+                aspectRatio: "20:13",
+                aspectMode: "cover"
+              },
+              body: {
+                type: "box",
+                layout: "vertical",
+                contents: [
+                  {
+                    type: "text",
+                    text: "ครูขาด-ลา",
+                    weight: "bold",
+                    size: "lg",
+                    color: "#e53e3e"
+                  },
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    margin: "lg",
+                    spacing: "sm",
+                    contents: [
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        spacing: "sm",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "ชื่อ:",
+                            color: "#ffffff",
+                            size: "sm",
+                            flex: 1
+                          },
+                          {
+                            type: "text",
+                            text: studentName,
+                            wrap: true,
+                            color: "#ffff00",
+                            size: "sm",
+                            flex: 5
+                          }
+                        ]
+                      },
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        spacing: "sm",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "เลขที่:",
+                            color: "#ffffff",
+                            size: "sm",
+                            flex: 1
+                          },
+                          {
+                            type: "text",
+                            text: studentNumber,
+                            wrap: true,
+                            color: "#41FF35",
+                            size: "sm",
+                            flex: 5
+                          }
+                        ]
+                      },
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        spacing: "sm",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "รหัส:",
+                            color: "#ffffff",
+                            size: "sm",
+                            flex: 1
+                          },
+                          {
+                            type: "text",
+                            text: studentId,
+                            wrap: true,
+                            color: "#CCFF00",
+                            size: "sm",
+                            flex: 5
+                          }
+                        ]
+                      },
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        spacing: "sm",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "วันที่:",
+                            color: "#ffffff",
+                            size: "sm",
+                            flex: 1
+                          },
+                          {
+                            type: "text",
+                            text: dateString,
+                            wrap: true,
+                            color: "#00ffff",
+                            size: "sm",
+                            flex: 5
+                          }
+                        ]
+                      },
+                      {
+                        type: "box",
+                        layout: "baseline",
+                        spacing: "sm",
+                        contents: [
+                          {
+                            type: "text",
+                            text: "ประเภทการลา:",
+                            color: "#ffffff",
+                            size: "sm",
+                            flex: 3
+                          },
+                          {
+                            type: "text",
+                            text: absenceType,
+                            wrap: true,
+                            color: "#FFCC00",
+                            weight: "bold",
+                            size: "sm",
+                            flex: 5
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                backgroundColor: "#999afc"
+              },
+              footer: {
+                type: "box",
+                layout: "vertical",
+                spacing: "sm",
+                contents: [
+                  {
+                    type: "box",
+                    layout: "vertical",
+                    contents: [
+                      {
+                        type: "text",
+                        text: `ผู้แจ้ง : ${lineProfile ? lineProfile.displayName : "แจ้งขาดเรียน"}`,
+                        size: "xs",
+                        color: "#99ffff",
+                        align: "center"
+                      }
+                    ]
+                  }
+                ],
+                flex: 0,
+                backgroundColor: "#ff9999"
+              }
+            }
+          };
+
+          console.log("Flex Message for single share:", JSON.stringify(flexMessage, null, 2));
+          const result = await liff.shareTargetPicker([flexMessage]);
+
+          if (result) {
+            Swal.fire({
+              icon: 'success',
+              title: 'แชร์สำเร็จ',
+              text: 'แชร์ข้อมูลเรียบร้อยแล้ว',
+              timer: 2000,
+              showConfirmButton: false
+            });
+            setTimeout(() => {
+          liff.closeWindow();
+        }, 3000);
+          } else {
+            Swal.fire({
+              icon: 'warning',
+              title: 'ยกเลิกการแชร์',
+              text: 'การแชร์ถูกยกเลิก',
+              timer: 2000,
+              showConfirmButton: false
+            });
+          }
+        } catch (error) {
+          console.error("Error sharing single attendance:", error);
+          Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'เกิดข้อผิดพลาดในการแชร์ข้อมูล: ' + error.message,
+            timer: 3000,
+            showConfirmButton: false
+          });
+        }
+      }
+
+      // Submit absence data to Google Sheet and share via LINE
+      async function submitAttendance() {
+        const checkboxes = document.querySelectorAll(".attendance-check");
+        const absenceData = [];
+        const absentStudents = [];
+
+        checkboxes.forEach(checkbox => {
+          if (checkbox.checked) {
+            const studentId = checkbox.getAttribute("data-id");
+            const studentNumber = checkbox.getAttribute("data-number");
+            const studentName = checkbox.getAttribute("data-name");
+            const imageUrl = checkbox.getAttribute("data-image");
+            const timestamp = studentTimestamps.get(studentId) || new Date().toLocaleTimeString("th-TH");
+            const absenceType = studentAbsenceTypes.get(studentId) || "ขาดงาน";
+
+            absenceData.push({
+              studentId: studentId,
+              timestamp: timestamp,
+              date: new Date().toISOString().split("T")[0],
+              absenceType: absenceType,
+            });
+
+            absentStudents.push({
+              id: studentId,
+              number: studentNumber,
+              name: studentName,
+              image: imageUrl,
+              timestamp: timestamp,
+              absenceType: absenceType,
+            });
+          }
+        });
+
+        if (absenceData.length === 0) {
+          showStatusMessage("กรุณาเลือกครูอย่างน้อย 1 คน", "error");
+          return;
+        }
+
+        // แสดง SweetAlert2 loading
+        Swal.fire({
+          title: 'กำลังบันทึกข้อมูล...',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          }
+        });
+
+        document.getElementById("submitBtn").disabled = true;
+
+        const scriptUrl = "https://script.google.com/macros/s/AKfycbxoaZpFAo-QREbkTmJTqyyqStQsjJItvsS9kd3v0fajnbZU9hGAa1ouYWQXp1m7zLXfsw/exec";
+        
+
+        try {
+          console.log("Submitting absence data:", JSON.stringify(absenceData, null, 2));
+          const response = await fetch(scriptUrl, {
+            method: "POST",
+            mode: "no-cors",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(absenceData),
+          });
+
+          console.log("POST request sent successfully");
+
+          if (liff.isApiAvailable("shareTargetPicker")) {
+            await shareAttendanceReport(absentStudents);
+          } else {
+            Swal.close();
+            showStatusMessage("ฟังก์ชันแชร์ไม่รองรับในอุปกรณ์นี้ กรุณาอัปเดต LINE เป็นเวอร์ชัน 10.3.0 หรือใหม่กว่า", "error");
+          }
+
+          Swal.close();
+          document.getElementById("submitBtn").disabled = false;
+          Swal.fire({
+            icon: 'success',
+            title: 'บันทึกสำเร็จ',
+            text: 'บันทึกข้อมูลครูขาด-ลาเรียบร้อยแล้ว',
+            timer: 2000,
+            showConfirmButton: false
+          });
+
+          studentTimestamps.clear();
+          studentAbsenceTypes.clear();
+          fetchData();
+          setTimeout(() => {
+          liff.closeWindow();
+        }, 3000);
+        } catch (error) {
+          console.error("Error submitting data:", error);
+          Swal.close();
+          document.getElementById("submitBtn").disabled = false;
+          Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + error.message,
+            timer: 3000,
+            showConfirmButton: false
+          });
+        }
+      }
+
+      // Share absence report via LINE
+      async function shareAttendanceReport(absentStudents) {
+        if (!liff.isApiAvailable("shareTargetPicker")) {
+          showStatusMessage("ฟังก์ชันแชร์ไม่รองรับในอุปกรณ์นี้ กรุณาอัปเดต LINE เป็นเวอร์ชัน 10.3.0 หรือใหม่กว่า", "error");
+          return;
+        }
+
+        try {
+          const now = new Date();
+          const dateString = now.toLocaleDateString("th-TH", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            weekday: "long",
+          });
+
+          // ตรวจสอบและกรอง absentStudents อย่างเข้มงวด
+          const validAbsentStudents = absentStudents
+            .filter(student => {
+              const isValid =
+                student.id &&
+                typeof student.id === 'string' &&
+                student.number &&
+                typeof student.number === 'string' &&
+                student.name &&
+                typeof student.name === 'string' &&
+                student.image &&
+                typeof student.image === 'string' &&
+                student.image !== 'https://via.placeholder.com/300?text=No+Image' &&
+                student.absenceType &&
+                typeof student.absenceType === 'string';
+              if (!isValid) {
+                console.warn("Invalid student data skipped:", student);
+              }
+              return isValid;
+            })
+            .slice(0, 9); // จำกัดสูงสุด 9 คน (เพื่อให้รวม summary bubble แล้วไม่เกิน 10)
+
+          if (validAbsentStudents.length === 0) {
+            showStatusMessage("ไม่มีข้อมูลครูถูกต้องสำหรับแชร์", "warning");
+            return;
+          }
+
+          console.log("Valid absent students for report:", validAbsentStudents);
+
+          // สร้าง carousel items สำหรับนักเรียนที่ขาดเรียน
+          const carouselItems = validAbsentStudents.map(student => ({
+            type: "bubble",
+            hero: {
+              type: "image",
+              url: student.image,
+              size: "full",
+              aspectRatio: "20:13",
+              aspectMode: "cover"
+            },
+            body: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: "ครูที่ขาด-ลา",
+                  weight: "bold",
+                  size: "lg",
+                  color: "#e53e3e"
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  margin: "lg",
+                  spacing: "sm",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "ชื่อ:",
+                          color: "#ffffff",
+                          size: "sm",
+                          flex: 1
+                        },
+                        {
+                          type: "text",
+                          text: student.name,
+                          wrap: true,
+                          color: "#ffff00",
+                          size: "sm",
+                          flex: 5
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "เลขที่:",
+                          color: "#ffffff",
+                          size: "sm",
+                          flex: 1
+                        },
+                        {
+                          type: "text",
+                          text: student.number,
+                          wrap: true,
+                          color: "#41FF35",
+                          size: "sm",
+                          flex: 5
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "รหัส:",
+                          color: "#ffffff",
+                          size: "sm",
+                          flex: 1
+                        },
+                        {
+                          type: "text",
+                          text: student.id,
+                          wrap: true,
+                          color: "#CCFF00",
+                          size: "sm",
+                          flex: 5
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "วันที่:",
+                          color: "#ffffff",
+                          size: "sm",
+                          flex: 1
+                        },
+                        {
+                          type: "text",
+                          text: dateString,
+                          wrap: true,
+                          color: "#00ffff",
+                          size: "sm",
+                          flex: 5
+                        }
+                      ]
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      spacing: "sm",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "ประเภทการลา:",
+                          color: "#ffffff",
+                          size: "sm",
+                          flex: 3
+                        },
+                        {
+                          type: "text",
+                          text: student.absenceType,
+                          wrap: true,
+                          color: "#FFCC00",
+                          weight: "bold",
+                          size: "sm",
+                          flex: 5
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              backgroundColor: "#999afc"
+            },
+            footer: {
+              type: "box",
+              layout: "vertical",
+              spacing: "sm",
+              contents: [
+                {
+                  type: "box",
+                  layout: "vertical",
+                  contents: [
+                    {
+                      type: "text",
+                      text: `ผู้แจ้ง : ${lineProfile ? sanitizeString(lineProfile.displayName) : "แจ้งขาด-ลา"}`,
+                      size: "xs",
+                      color: "#99ffff",
+                      align: "center"
+                    }
+                  ]
+                }
+              ],
+              flex: 0,
+              backgroundColor: "#ff9999"
+            }
+          }));
+
+          // สร้าง summary bubble สำหรับยอดขาดเรียน
+          const summaryBubble = {
+            type: "bubble",
+            header: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "image",
+                  url: "https://kruaunjaidee.github.io/logo-klaeng/Icon%20klaeng.png",
+                  size: "xl",
+                  aspectRatio: "1:1",
+                  aspectMode: "fit",
+                  action: {
+                    type: "uri",
+                    uri: "https://www.facebook.com/klaeng.ac.th"
+                  }
+                }
+              ],
+              backgroundColor: "#ffccff",
+              height: "160px"
+            },
+            body: {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                {
+                  type: "text",
+                  text: "สรุปขาด-ลา",
+                  weight: "bold",
+                  size: "3xl",
+                  color: "#FF0099",
+                },
+                {
+                  type: "text",
+                  text: dateString,
+                  size: "md",
+                  color: "#6666FF",
+                  margin: "md",
+                  weight: "bold",
+                },
+                {
+                  type: "box",
+                  layout: "vertical",
+                  spacing: "sm",
+                  contents: [
+                    {
+                      type: "box",
+                      layout: "vertical",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "กลุ่มภาษาไทย",
+                          color: "#9999ff",
+                          size: "lg",
+                          flex: 3,
+                          weight: "bold",
+                        },
+                        {
+                          type: "text",
+                          text: `${validAbsentStudents.length} คน`,
+                          wrap: true,
+                          color: "#cc15cc",
+                          weight: "bold",
+                          size: "5xl",
+                          flex: 5,
+                          align: "center",
+                        },
+                      ],
+                    },
+                    {
+                      type: "box",
+                      layout: "baseline",
+                      contents: [
+                        {
+                          type: "text",
+                          text: "บันทึกโดย:",
+                          color: "#9999ff",
+                          size: "lg",
+                          flex: 3,
+                          weight: "bold",
+                        },
+                        {
+                          type: "text",
+                          text: lineProfile ? sanitizeString(lineProfile.displayName) : "ผู้บันทึก",
+                          wrap: true,
+                          color: "#Ff00ff",
+                          size: "lg",
+                          flex: 5,
+                          weight: "bold",
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              backgroundColor: "#ffccff",
+            },
+          };
+
+          // เพิ่ม summary bubble ไว้ด้านหน้าสุด
+          carouselItems.unshift(summaryBubble);
+
+          // ตรวจสอบจำนวน bubbles
+          if (carouselItems.length > 10) {
+            console.warn("Too many carousel items:", carouselItems.length);
+            carouselItems.splice(10);
+          }
+
+          // สร้าง flex message carousel
+          const flexMessage = {
+            type: "flex",
+            altText: `สรุปครูขาด-ลา ${dateString}`,
+            contents: {
+              type: "carousel",
+              contents: carouselItems,
+            },
+          };
+
+          console.log("Flex Message for report:", JSON.stringify(flexMessage, null, 2));
+          const result = await liff.shareTargetPicker([flexMessage]);
+
+          if (result) {
+            Swal.fire({
+              icon: 'success',
+              title: 'แชร์สำเร็จ',
+              text: 'แชร์ข้อมูลเรียบร้อยแล้ว',
+              timer: 2000,
+              showConfirmButton: false
+            });
+            setTimeout(() => {
+          liff.closeWindow();
+        }, 3000);
+          } else {
+            Swal.fire({
+              icon: 'warning',
+              title: 'ยกเลิกการแชร์',
+              text: 'การแชร์ถูกยกเลิก',
+              timer: 2000,
+              showConfirmButton: false
+            });
+          }
+          setTimeout(() => {
+          liff.closeWindow();
+        }, 3000);
+        } catch (error) {
+          console.error("Error sharing report:", error, error.stack);
+          Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาด',
+            text: 'เกิดข้อผิดพลาดในการแชร์ข้อมูล: ' + error.message,
+            timer: 3000,
+            showConfirmButton: false
+          });
+        }
+      }
+
+      // Display status message (for non-SweetAlert cases)
+      function showStatusMessage(message, type) {
+        const statusDiv = document.getElementById("statusMessage");
+        statusDiv.textContent = message;
+        statusDiv.classList.remove("hidden", "bg-green-100", "text-green-800", "bg-red-100", "text-red-800", "bg-yellow-100", "text-yellow-800");
+
+        switch (type) {
+          case "success":
+            statusDiv.classList.add("bg-green-100", "text-green-800");
+            break;
+          case "error":
+            statusDiv.classList.add("bg-red-100", "text-red-800");
+            break;
+          case "warning":
+            statusDiv.classList.add("bg-yellow-100", "text-yellow-800");
+            break;
+        }
+
+        statusDiv.classList.remove("hidden");
+
+        setTimeout(() => {
+          statusDiv.classList.add("hidden");
+        }, 5000);
+      }
+
+      // Add event listener to submit button
+      document.getElementById("submitBtn").addEventListener("click", submitAttendance);
+
+      // Initialize app when document is loaded
+      document.addEventListener("DOMContentLoaded", async function () {
+        if (liff) {
+          await initializeLiff();
+        } else {
+          console.error("LIFF SDK not loaded");
+          showStatusMessage("ไม่สามารถโหลด LINE LIFF SDK ได้", "error");
+          showCurrentDate();
+          await fetchData();
+          hidePreloader();
+        }
+      });
+
+      // Handle LIFF errors better
+      window.onerror = function (message, source, lineno, colno, error) {
+        console.error("Global error:", message, error);
+        if (message.toLowerCase().includes("liff")) {
+          showStatusMessage("เกิดข้อผิดพลาดในการเชื่อมต่อกับ LINE LIFF: " + message, "error");
+          hidePreloader();
+        }
+      };
+
+      // Export absence data as TXT
+      function exportAttendanceAsTxt() {
+        const checkboxes = document.querySelectorAll(".attendance-check");
+        let txtContent = "รหัสครู\tเลขที่\tชื่อ-นามสกุล\tเวลาเช็คชื่อ\tประเภทการลา\tวันที่\n";
+
+        const now = new Date();
+        const dateString = now.toLocaleDateString("th-TH", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          weekday: "long",
+        });
+
+        checkboxes.forEach(checkbox => {
+          if (checkbox.checked) {
+            const studentId = checkbox.getAttribute("data-id");
+            const studentNumber = checkbox.getAttribute("data-number");
+            const studentName = checkbox.getAttribute("data-name");
+            const timestamp = studentTimestamps.get(studentId) || "";
+            const absenceType = studentAbsenceTypes.get(studentId) || "ขาดงาน";
+
+            txtContent += `${studentId}\t${studentNumber}\t${studentName}\t${timestamp}\t${absenceType}\t${dateString}\n`;
+          }
+        });
+
+        const encodedUri = encodeURI("data:text/plain;charset=utf-8," + txtContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `การขาด-ลา-${now.toISOString().split("T")[0]}.txt`);
+        document.body.appendChild(link);
+
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      // Add "Select All" functionality
+      function addSelectAllCheckbox() {
+        if (document.getElementById("selectAll")) return;
+        const headerRow = document.querySelector("#dataTable thead tr");
+        const selectAllCell = document.createElement("th");
+        selectAllCell.className = "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider";
+        selectAllCell.textContent = "เลือกทั้งหมด";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = "selectAll";
+        checkbox.className = "h-5 w-5 text-red-600 rounded";
+        selectAllCell.prepend(checkbox);
+
+        headerRow.insertBefore(selectAllCell, headerRow.firstChild);
+
+        checkbox.addEventListener("change", function () {
+          const checkboxes = document.querySelectorAll(".attendance-check");
+          checkboxes.forEach(studentCheckbox => {
+            studentCheckbox.checked = this.checked;
+            const event = new Event("change");
+            studentCheckbox.dispatchEvent(event);
+          });
+        });
+      }
+
+      // Function to filter students by name or ID
+      function setupSearchFilter() {
+        if (document.getElementById("searchInput")) return;
+        const searchContainer = document.createElement("div");
+        searchContainer.className = "mb-4";
+        searchContainer.innerHTML = `
+          <div class="relative">
+            <input type="text" id="searchInput" placeholder="ค้นหาชื่อหรือรหัสนักเรียน..." 
+              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500">
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+            </div>
+          </div>
+        `;
+
+        const dataContainer = document.getElementById("data-container");
+        dataContainer.insertBefore(searchContainer, dataContainer.firstChild);
+
+        document.getElementById("searchInput").addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase();
+          const rows = document.querySelectorAll("#tableBody tr");
+
+          rows.forEach(row => {
+            const studentId = row.querySelector("td:nth-child(4)").textContent.toLowerCase();
+            const studentName =
+              row.querySelector("td:nth-child(6)").textContent.toLowerCase() +
+              " " +
+              row.querySelector("td:nth-child(7)").textContent.toLowerCase();
+
+            if (studentId.includes(searchTerm) || studentName.includes(searchTerm)) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+        });
+      }
+
+      // Add additional features after fetching data
+      function addAdditionalFeatures() {
+        const existingExportBtn = document.getElementById("exportBtn");
+        if (!existingExportBtn) {
+          const exportBtn = document.createElement("button");
+          exportBtn.id = "exportBtn";
+          exportBtn.className = "px-6 py-3 bg-blue-600 text-white font-medium rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors ml-4";
+          exportBtn.textContent = "ส่งออก TXT";
+          exportBtn.addEventListener("click", exportAttendanceAsTxt);
+
+          document.getElementById("submitBtn").parentNode.appendChild(exportBtn);
+        }
+
+        addSelectAllCheckbox();
+        setupSearchFilter();
+      }
+    </script>
+  </body>
+</html>
